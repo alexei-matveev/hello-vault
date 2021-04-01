@@ -1,0 +1,105 @@
+#
+# kubectl apply -k .
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: metabase-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      component: metabase-server
+  template:
+    metadata:
+      labels:
+        component: metabase-server
+    spec:
+      # Volumes used by some or all containers of the Pod:
+      volumes:
+      - name: "metabase-data"
+        persistentVolumeClaim:
+          claimName: "metabase-data"
+      containers:
+      - name: metabase-server
+        # Exact version see kustomization.yaml:
+        image: "metabase/metabase"
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        volumeMounts:
+        - mountPath: "/data"
+          name: "metabase-data"
+        env:
+        - name: "MB_DB_FILE"
+          value: "/data/metabase.db"
+        # Default ist wohl /app/plugins, das wäre aber ein weiteres
+        # Mount Point.  So bleibt alles auf einem Volume.  Oracle JDBC
+        # Treiber geht zum Beispiel dahin:
+        - name: "MB_PLUGINS_DIR"
+          value: "/data/plugins"
+        # Wenn nicht explizit angebenen würde der Java Process als
+        # UID=2000 laufen.  Das Startup Skript unter /app nutzt diese
+        # undokumentierte (?) Variablen:
+        - name: "MUID"
+          value: "1005"
+        - name: "MGID"
+          value: "1005"
+      initContainers:
+      - name: metabase-init
+        image: "metabase/metabase"
+        command: ["sh", "-c", "ls -l /d"]
+        # command: ["tail", "-f", "/dev/null"]
+        volumeMounts:
+          - mountPath: "/d"
+            name: "metabase-data"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: metabase-server
+spec:
+  type: ClusterIP
+  selector:
+    component: metabase-server
+  ports:
+  - port: 3000
+    targetPort: 3000
+---
+#
+# We  assume here  that  *.localhost resolves  to  the local  machine.
+# Following URL should be directed to corresponding Service, also with
+# https:// protocoll:
+#
+#     http://metabase.localhost
+#
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: metabase
+spec:
+  rules:
+  - host: metabase.localhost
+    http:
+      paths:
+      - backend:
+          serviceName: metabase-server
+          servicePort: 3000
+---
+# https://github.com/rancher/local-path-provisioner
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: "metabase-data"
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # When you  dont specify  storage class at  all the  default storage
+  # class may be chosen. In k3s with local-path provisioner it is also
+  # the  default one.  Omitted  storageClassName is  not  the same  as
+  # storageClassName = "".
+  # storageClassName: local-path
+  resources:
+    requests:
+      storage: 1Gi
+...

@@ -1,0 +1,10 @@
+# kubectl apply -k .
+namespace: "hello-metabase"
+namePrefix: ""
+nameSuffix: ""
+resources:
+  - deployment.yaml
+images:
+  - name: "metabase/metabase"
+    newName: "metabase/metabase"
+    newTag: "v0.36.8.2"
