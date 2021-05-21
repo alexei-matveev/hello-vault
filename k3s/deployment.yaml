@@ -1,96 +1,81 @@
 #
 # kubectl apply -k .
 #
+# [1] https://hub.docker.com/_/vault
+#
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: metabase-server
+  name: vault-server
 spec:
   replicas: 1
   selector:
     matchLabels:
-      component: metabase-server
+      component: vault-server
   template:
     metadata:
       labels:
-        component: metabase-server
+        component: vault-server
     spec:
       # Volumes used by some or all containers of the Pod:
       volumes:
-      - name: "metabase-data"
+      - name: "vault-data"
         persistentVolumeClaim:
-          claimName: "metabase-data"
+          claimName: "vault-data"
       containers:
-      - name: metabase-server
-        # Exact version see kustomization.yaml:
-        image: "metabase/metabase"
+      - name: vault-server
+        # docker run --cap-add=IPC_LOCK
+        # -e 'VAULT_LOCAL_CONFIG={"backend": {"file": {"path": "/vault/file"}}, "default_lease_ttl": "168h", "max_lease_ttl": "720h"}'
+        # vault server
+        image: "vault"          # exact version see kustomization.yaml
+        command: ["vault", "server", "-dev", "-dev-listen-address=0.0.0.0:8200"]
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 3000
+        - containerPort: 8200
         volumeMounts:
-        - mountPath: "/data"
-          name: "metabase-data"
+        - mountPath: "/vault"
+          name: "vault-data"
         env:
-        - name: "MB_DB_FILE"
-          value: "/data/metabase.db"
-        # Default ist wohl /app/plugins, das wäre aber ein weiteres
-        # Mount Point.  So bleibt alles auf einem Volume.  Oracle JDBC
-        # Treiber geht zum Beispiel dahin:
-        - name: "MB_PLUGINS_DIR"
-          value: "/data/plugins"
-        # Wenn nicht explizit angebenen würde der Java Process als
-        # UID=2000 laufen.  Das Startup Skript unter /app nutzt diese
-        # undokumentierte (?) Variablen:
-        - name: "MUID"
-          value: "1005"
-        - name: "MGID"
-          value: "1005"
-      initContainers:
-      - name: metabase-init
-        image: "metabase/metabase"
-        command: ["sh", "-c", "ls -l /d"]
-        # command: ["tail", "-f", "/dev/null"]
-        volumeMounts:
-          - mountPath: "/d"
-            name: "metabase-data"
+        - name: "VAULT_LOCAL_CONFIG"
+          value: '{"backend": {"file": {"path":"/vault/file"}}, "default_lease_ttl": "168h", "max_lease_ttl": "720h"}'
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: metabase-server
+  name: vault-server
 spec:
   type: ClusterIP
   selector:
-    component: metabase-server
+    component: vault-server
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 8200
+    targetPort: 8200
 ---
 #
 # We  assume here  that  *.localhost resolves  to  the local  machine.
 # Following URL should be directed to corresponding Service, also with
 # https:// protocoll:
 #
-#     http://metabase.localhost
+#     http://vault.localhost
 #
 apiVersion: networking.k8s.io/v1beta1
 kind: Ingress
 metadata:
-  name: metabase
+  name: vault
 spec:
   rules:
-  - host: metabase.localhost
+  - host: vault.localhost
     http:
       paths:
       - backend:
-          serviceName: metabase-server
-          servicePort: 3000
+          serviceName: vault-server
+          servicePort: 8200
 ---
 # https://github.com/rancher/local-path-provisioner
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: "metabase-data"
+  name: "vault-data"
 spec:
   accessModes:
     - ReadWriteOnce

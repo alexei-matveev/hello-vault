@@ -1,4 +1,4 @@
-#### Experiments with Metabase in k3s
+#### Experiments with Vault in k3s
 
 Assuming you already installed the Token in your local config:
 
@@ -6,10 +6,10 @@ Assuming you already installed the Token in your local config:
     $ kubectl get nodes
     $ source <(kubectl completion bash)
 
-Siehe [Releases](https://github.com/metabase/metabase/releases).
+Siehe Docker [Hub](https://hub.docker.com/_/vault).
 
-    $ kubectl create namespace hello-metabase
-    $ kubectl config set-context --current --namespace=hello-metabase
+    $ kubectl create namespace hello-vault
+    $ kubectl config set-context --current --namespace=hello-vault
     $ kubectl apply -k k3s/
 
-Then visit the [URL](https://metabase.localhost).
+Then visit the [URL](https://vault.localhost).
